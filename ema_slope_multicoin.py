@@ -2,132 +2,126 @@ import ccxt
 import os 
 import re
 import time
+from numpy.core.numeric import cross
+import pushbullet
 import schedule
 import datetime
 import pandas as pd
-from pushbullet import Pushbullet #to comunicate with ethernal log
 import numpy as np
-from stockstats import StockDataFrame as Sdf
+from ExchangeConnector import ExchangeConnector
+from pushbullet import Pushbullet #to comunicate with ethernal log
+
 
 h12_pairs=[]
-
-
+PRODUCTION=False
+pb = Pushbullet("o.tnrSSAKjGKqaOs3qLm59x9jLFjkHYRUd")
 # configure exchange for datafeed (orders in other file)
 exchange = ccxt.binance({
   'timeout': 10000,
   'enableRateLimit': True
 })
-#define comunication interface api
-pb = Pushbullet("")
-ONLY_CHANGE_POSITION_COMUNICATIONS=False
-def init_pairs_12h():
-    h12_pairs.append({'pair':'BTC/USDT','sentinel': 1,'slopeshortparam':9,'slopelongparam':21,'baseema':130,'tfema':200})
-    h12_pairs.append({'pair':'BNB/BTC','sentinel': 1,'slopeshortparam':9,'slopelongparam':21,'baseema':130,'tfema':200})
-    pass
-
-
 def get_historical_data(coin_pair, timeframe):
-    """Get Historical data (ohlcv) from a coin_pair
-    """
-    # optional: exchange.fetch_ohlcv(coin_pair, '1h', since)
-    data = exchange.fetch_ohlcv(coin_pair, timeframe)
+    # optional: 
+    data=exchange.fetch_ohlcv(coin_pair, timeframe)
+    #data = exchange.fetch_ohlcv(coin_pair, timeframe)
     # update timestamp to human readable timestamp
     data = [[exchange.iso8601(candle[0])] + candle[1:] for candle in data]
-    header = ['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']
+    header = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
     df = pd.DataFrame(data, columns=header)
     return df
-def create_stock(historical_data):
-    stock  = Sdf.retype(historical_data)
-    return stock
-def ema(values, period):
-    values = np.array(values)
-    df_test = pd.DataFrame(data = values)
-    return df_test.ewm( span=period).mean()
-def return_ema_vector(stock,emalength):
-    return stock['close_'+emalength+'_ema']
-def return_change_vector(ema_vector):
-    change_vector=[]
-    for i in range(1,len(ema_vector)-1):
-        change_vector.append(ema_vector[i]-ema_vector[i-1])
-    return change_vector
-def return_slp_vector(ema_vector):
-    change_vector=return_change_vector(ema_vector)
-    slp_vector=[]
-    for change in change_vector:
-        slp_vector.append(change/ema_vector[len(ema_vector)-1])
-    return slp_vector
-def crossunder(ema1,ema2):
-    if (ema1[0]>ema1[1])and (ema2[0]<ema2[1]):
-        return True
-    return False
-def check_entry(sentinel,price_200_ema,emaSlopeF_last,emaSlopeS_last,emaSlopeF_previus,emaSlopeS_previus,price):
+def calculate_SMA(ser, len):
+    sma = ser.rolling(window=len).mean()
+    return sma
+def calculate_EMA(ser,days):
+    return ser.ewm(span=days,min_periods=0,adjust=False,ignore_na=False).mean()
+def calculate_SLP(ser):
+    slp= (ser.diff(periods=1)/ser)*100
+    return slp
+def send_exchange_order(pair,isderivate,sentinel,old_sentinel,result):
+    EC=ExchangeConnector(pair,isderivate)
+    if(result!=0)and(sentinel!=0)and(old_sentinel==0):   #caso di apertura posizione
+        if(result > 0):
+            EC.buy()
+        else:
+            if isderivate:                              #apre short solo il caso sia un derivato per evitare il margin trading (si puo cabiare)
+                EC.sell()
+        print(pair," OPENING ",result)
 
-    ConditionEntryLong = (emaSlopeF_last>emaSlopeS_last) and not (sentinel<0) and (price>price_200_ema)
-    ConditionEntryShort= (emaSlopeF_last<emaSlopeS_last) and not (sentinel>0) and (price<price_200_ema)
-    ConditionExitL=crossunder([emaSlopeF_previus,emaSlopeS_previus],[emaSlopeF_last,emaSlopeS_last]) and sentinel==1
-    ConditionExitS=crossunder([emaSlopeS_previus,emaSlopeF_previus],[emaSlopeS_last,emaSlopeF_last]) and sentinel==-1
+    if(result!=0)and(sentinel==0)and(old_sentinel!=0):  #caso chiusura posizione
+        if(isderivate>0):
+            EC.ClosePosition()
+        else:
+            if(result>0):
+                EC.buy()
+            else:
+                EC.sell()
+        print(pair," CLOSING ",result)
+def do_strategy(data,position,base_len=130,fast_len=9,slow_len=21,tf_len=200):
+    result=0
+    filter_ema=calculate_EMA(data,tf_len)
+    TrandFilter=filter_ema.close.iloc[-1]<data.close.iloc[-1]       #true se ema 200 < close
+    base_ema=calculate_EMA(data,base_len)
+    slp=calculate_SLP(base_ema)
 
-    if (ConditionExitL  and sentinel!=0) :
-        sentinel=0
-        return -1
+    slopeFast=calculate_EMA(slp,fast_len)
+    slopeSlow=calculate_EMA(slp,slow_len)
+    
 
-    if (ConditionExitS  and sentinel!=0) :
-        sentinel=0
-        return 1 
+    EntryLong=(slopeFast.close.iloc[-1]>slopeSlow.close.iloc[-1]) and TrandFilter
+    ExitLong=(slopeSlow.close.iloc[-1]>slopeFast.close.iloc[-1]) and (slopeSlow.close.iloc[-2]<slopeFast.close.iloc[-2])
 
-    if(ConditionEntryLong and sentinel==0):
-        sentinel=1
-        return 1
+    EntryShort=(slopeFast.close.iloc[-1]<slopeSlow.close.iloc[-1]) and (not TrandFilter)
+    ExitShort=(slopeSlow.close.iloc[-1]<slopeFast.close.iloc[-1]) and (slopeSlow.close.iloc[-2]>slopeFast.close.iloc[-2])
 
-    if(ConditionEntryShort and sentinel==0):
-        sentinel -1
-        return -1
+    if(EntryLong) and position==0:
+        result=1
+    if(ExitLong) and position>0:
+        result=-1
+    if(EntryShort)and position==0:
+        result=-1
+    if(ExitShort) and position<0:
+        result=1
 
-    return 0  
-def check_pair(pair,sentinel,slopeshortparam,slopelongparam,baseema,tfema):
-    data=create_stock(get_historical_data(pair,'12h'))
-    slp=return_slp_vector(return_ema_vector(data,str(baseema)))
-    emaSlopeF_last=ema(slp,slopeshortparam)
-    emaSlopeS_last=ema(slp,slopelongparam)
-    emaSlopeF_prev=emaSlopeF_last[0][len(emaSlopeF_last[0])-2]
-    emaSlopeS_prev=emaSlopeS_last[0][len(emaSlopeS_last[0])-2]
-    emaSlopeF_last=emaSlopeF_last[0][len(emaSlopeF_last[0])-1]
-    emaSlopeS_last=emaSlopeS_last[0][len(emaSlopeS_last[0])-1]
-    tranding_ema=return_ema_vector(data,str(tfema))
-    tranding_ema=tranding_ema[len(tranding_ema)-1]
-    old_position=sentinel
-    act_price=data['close'][len(data)-1]
-    result=check_entry(sentinel,tranding_ema,emaSlopeF_last,emaSlopeS_last,emaSlopeF_prev,emaSlopeS_prev,act_price)
+    if result!=0:
+        f=open("LOG.csv",'a+')
+        #DATA:PRICE:OLD:RES:NEW:SHORT:LONG
+        string=""+data.timestamp.iloc[-1]+";"+str(data.close.iloc[-1])+";"+str(position)+";"+str(result)+";"+str(position+result)+";"+str(slopeFast.close.iloc[-1])+";"+str(slopeSlow.close.iloc[-1])
+        f.write(string+'\n')
+    return position,result,position+result
+def run_12h_wrapper(pair,position,base_len,fast_len,slow_len,tf_len,isderivate):
+    data=get_historical_data(pair,'12h')
+    old,res,pos=do_strategy(data,position,base_len,fast_len,slow_len,tf_len)
 
-    if(ONLY_CHANGE_POSITION_COMUNICATIONS==False):
-        push = pb.push_note(pair+" "+__name__, "Result: "+str(result)+" New positon: "+str(sentinel)+ " Old position: "+str(old_position))
-    else:
-        if(result!=0):
-            push = pb.push_note(pair+" "+__name__, "Result: "+str(result)+" New positon: "+str(sentinel)+ " Old position: "+str(old_position))
-def check_trandfollower_12h():
+    
+    string="OLD POSITION: "+str(old)+" RESULT: "+str(res)+" NEW POSITION: "+str(pos)
+    pb.push_note(pair,string)
+    print(pair,string)
+    if (res!=0):
+        if(PRODUCTION):
+            send_exchange_order(pair,isderivate,pos,old,res)
+
+    return pos
+
+def init_h12_pairs():
+    h12_pairs.append({'pair':'BTC/USDT', 'position': 1, "base_ema":130, "fast":9, "slow" : 21, "tf_ema":200,"isderivate":1})
+def run_12h_slope():
     for pair in h12_pairs:
-        check_pair(pair['pair'],pair['sentinel'],pair['slopeshortparam'],pair['slopelongparam'],pair['baseema'],pair['tfema'])
-    pass
-def main():
-    init_pairs_12h()
-    exchange.load_markets()
-    a= datetime.datetime.now()
-    push = pb.push_note(__name__, "STARTING") 
-    check_trandfollower_12h()
-    while (a.minute!=0 and a.second!=0 and a.microsecond!=0):
-        pass
-    push = pb.push_note(__name__, "STARTED")
-    check_trandfollower_12h()
-    schedule.every(1).hour.do(check_trandfollower_12h)
+        pair['position']=run_12h_wrapper(pair['pair'],pair['position'],pair['base_ema'],pair['fast'],pair['slow'],pair['tf_ema'],pair['isderivate'])
+        
 
+def main():
+    init_h12_pairs()
+    exchange.load_markets()
+    pb.push_note("BOT TW", "STARTING") 
+    print("STARTING AT",datetime.datetime.now())
+    push = pb.push_note(__name__, "STARTED at "+str(datetime.datetime.now()))
+    run_12h_slope()
+    schedule.every(1).hour.do(run_12h_slope)
+    while datetime.datetime.now.minute!=0:
+        time.sleep(1)
+        pass
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 main()
-
-
-
-
-
-
