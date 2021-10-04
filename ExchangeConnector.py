@@ -9,8 +9,8 @@ class ExchangeConnector:
             self.exchanges=[
             {
                 'exchange':"FTX",   #GiorgioCopertureBtc
-                'api':"Q8doVf12uiFtnjYsUvqE8Cfxhotvaq-rOywAioS9",
-                'secret':"0K2IeXv6dX1OmD47wq-WXwFz_07i9y1HBaLDlhrL",
+                'api':"",
+                'secret':"",
                 'subaccount':"coperturabtc"
 
             }]
@@ -18,8 +18,8 @@ class ExchangeConnector:
             self.exchanges=[
             {
                 'exchange':"FTX",   #GiorgioCopertureEth
-                'api':"Q8doVf12uiFtnjYsUvqE8Cfxhotvaq-rOywAioS9",
-                'secret':"0K2IeXv6dX1OmD47wq-WXwFz_07i9y1HBaLDlhrL",
+                'api':"",
+                'secret':"",
                 'subaccount':"coperturaeth"
 
             }]

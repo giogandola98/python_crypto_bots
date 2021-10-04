@@ -114,10 +114,10 @@ def main():
     exchange.load_markets()
     pb.push_note("BOT TW", "STARTING") 
     print("STARTING AT",datetime.datetime.now())
+    schedule.every(1).hour.do(run_12h_slope)
     push = pb.push_note(__name__, "STARTED at "+str(datetime.datetime.now()))
     run_12h_slope()
-    schedule.every(1).hour.do(run_12h_slope)
-    while datetime.datetime.now.minute!=0:
+    while datetime.datetime.now().minute!=0:
         time.sleep(1)
         pass
     while True:
