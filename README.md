@@ -4,6 +4,7 @@
 - python3 installed and in path
 - pip3 installed and in path
 - pushbullet installed on pc or phone (free versione) and API token 
+- pip3 install -r requirements.txt
 
 ### **SETUP PRODUCTION**
 1. get pushbullet api token from pushbulet website (in settings)
