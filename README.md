@@ -1,4 +1,4 @@
-# python_crypto_bots
+# EmaSlopeTF by @lukescream coded by @giogandola98
 
 ### **REQUIREMENTS**
 - python3 installed and in path
