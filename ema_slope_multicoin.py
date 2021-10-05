@@ -1,3 +1,8 @@
+'''
+#lukescream ema slope trandfollower strategy pine coded to python 
+by
+@gigandola98
+'''
 import ccxt
 import os 
 import re
@@ -9,12 +14,13 @@ import datetime
 import pandas as pd
 import numpy as np
 from ExchangeConnector import ExchangeConnector
-from pushbullet import Pushbullet #to comunicate with ethernal log
+from pushbullet import Pushbullet 
 
 
 h12_pairs=[]
 PRODUCTION=False
-pb = Pushbullet("o.tnrSSAKjGKqaOs3qLm59x9jLFjkHYRUd")
+pb = Pushbullet("")     #here pushbullet api to have notifications
+
 # configure exchange for datafeed (orders in other file)
 exchange = ccxt.binance({
   'timeout': 10000,
@@ -22,8 +28,8 @@ exchange = ccxt.binance({
 })
 def get_historical_data(coin_pair, timeframe):
     # optional: 
-    data=exchange.fetch_ohlcv(coin_pair, timeframe)
-    #data = exchange.fetch_ohlcv(coin_pair, timeframe)
+    #data=exchange.fetch_ohlcv(coin_pair, timeframe,since)
+    data = exchange.fetch_ohlcv(coin_pair, timeframe)
     # update timestamp to human readable timestamp
     data = [[exchange.iso8601(candle[0])] + candle[1:] for candle in data]
     header = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
@@ -43,7 +49,7 @@ def send_exchange_order(pair,isderivate,sentinel,old_sentinel,result):
         if(result > 0):
             EC.buy()
         else:
-            if isderivate:                              #apre short solo il caso sia un derivato per evitare il margin trading (si puo cabiare)
+            if isderivate:                              #apre short solo il caso sia un derivato per evitare il margin trading (si puo cambiare)
                 EC.sell()
         print(pair," OPENING ",result)
 
@@ -113,13 +119,13 @@ def main():
     init_h12_pairs()
     exchange.load_markets()
     pb.push_note("BOT TW", "STARTING") 
-    print("STARTING AT",datetime.datetime.now())
-    schedule.every(1).hour.do(run_12h_slope)
     push = pb.push_note(__name__, "STARTED at "+str(datetime.datetime.now()))
     run_12h_slope()
     while datetime.datetime.now().minute!=0:
         time.sleep(1)
         pass
+    print("STARTING AT",datetime.datetime.now())
+    schedule.every(1).hour.do(run_12h_slope)
     while True:
         schedule.run_pending()
         time.sleep(1)
