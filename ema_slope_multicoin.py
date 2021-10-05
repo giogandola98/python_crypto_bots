@@ -18,8 +18,9 @@ from pushbullet import Pushbullet
 
 
 h12_pairs=[]
-PRODUCTION=False
-pb = Pushbullet("")     #here pushbullet api to have notifications
+PUSHTOKEN=""
+PRODUCTION=True
+pb = Pushbullet(PUSHTOKEN)     #here pushbullet api to have notifications
 
 # configure exchange for datafeed (orders in other file)
 exchange = ccxt.binance({
@@ -110,6 +111,7 @@ def run_12h_wrapper(pair,position,base_len,fast_len,slow_len,tf_len,isderivate):
 
 def init_h12_pairs():
     h12_pairs.append({'pair':'BTC/USDT', 'position': 1, "base_ema":130, "fast":9, "slow" : 21, "tf_ema":200,"isderivate":1})
+    
 def run_12h_slope():
     for pair in h12_pairs:
         pair['position']=run_12h_wrapper(pair['pair'],pair['position'],pair['base_ema'],pair['fast'],pair['slow'],pair['tf_ema'],pair['isderivate'])

@@ -5,28 +5,28 @@ class ExchangeConnector:
     def __init__(self,pair,isderivate):
         self.pair=pair
         self.isderivate=isderivate
-        if "USD" in self.pair and "BTC" in self.pair:
+        if "USD" in self.pair and "BTC" in self.pair:           #if pair is btc
             self.exchanges=[
             {
-                'exchange':"FTX",   #GiorgioCopertureBtc
+                'exchange':"FTX",   
                 'api':"",
                 'secret':"",
                 'subaccount':"coperturabtc"
 
             }]
-        if "USD" in self.pair and "ETH" in self.pair:
+        if "USD" in self.pair and "ETH" in self.pair:           #if pair is eth
             self.exchanges=[
             {
-                'exchange':"FTX",   #GiorgioCopertureEth
+                'exchange':"FTX",   
                 'api':"",
                 'secret':"",
                 'subaccount':"coperturaeth"
 
             }]
-        if self.pair=="BNB/BTC" :
+        if self.pair=="BNB/BTC" :                               #if pair is bnb
             self.exchanges=[
             {
-                'exchange':"FTX",   #MassimoBnbSpot
+                'exchange':"FTX",   
                 'api':"",
                 'secret':"",
                 'subaccount':""
