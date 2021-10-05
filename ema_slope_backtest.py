@@ -39,9 +39,17 @@ def calculate_SLP(ser):
     slp= (ser.diff(periods=1)/ser)*100
     return slp
 
+def calculate_STD(ser,windows):
+    return ser.rolling(window=windows).std()
+
 def backtest_strategy(data,position):
     result=0
-    filter_ema=calculate_EMA(data,200)
+    vol_filter_len=20
+    std_ema_len=30
+    std_vector=calculate_STD(data,vol_filter_len)
+    std_ema_vector=calculate_EMA(std_vector,std_ema_len)
+    volfilter=std_vector.close.iloc[-1]>std_ema_vector.close.iloc[-1]
+    filter_ema=calculate_EMA(data,150)
     TrandFilter=filter_ema.close.iloc[-1]<data.close.iloc[-1]       #true se ema 200 < close
     base_ema=calculate_EMA(data,130)
     slp=calculate_SLP(base_ema)
@@ -50,10 +58,10 @@ def backtest_strategy(data,position):
     slopeSlow=calculate_EMA(slp,21)
     
 
-    EntryLong=(slopeFast.close.iloc[-1]>slopeSlow.close.iloc[-1]) and TrandFilter
+    EntryLong=(slopeFast.close.iloc[-1]>slopeSlow.close.iloc[-1]) and TrandFilter and volfilter
     ExitLong=(slopeSlow.close.iloc[-1]>slopeFast.close.iloc[-1]) and (slopeSlow.close.iloc[-2]<slopeFast.close.iloc[-2])
 
-    EntryShort=(slopeFast.close.iloc[-1]<slopeSlow.close.iloc[-1]) and (not TrandFilter)
+    EntryShort=(slopeFast.close.iloc[-1]<slopeSlow.close.iloc[-1]) and (not TrandFilter) and False
     ExitShort=(slopeSlow.close.iloc[-1]<slopeFast.close.iloc[-1]) and (slopeSlow.close.iloc[-2]>slopeFast.close.iloc[-2])
 
     if(EntryLong) and position==0:
@@ -72,7 +80,7 @@ def backtest_strategy(data,position):
         f.write(string+'\n')
     return position,result,position+result
 
-data=get_historical_data('BTC/USDT','12h')
+data=get_historical_data('ETH/BTC','12h')
 actual_position=0
 for i in range(120,len(data)-1):
     prev_pos,result,actual_position=backtest_strategy(data[:i],actual_position)
