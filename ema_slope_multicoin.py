@@ -110,6 +110,15 @@ def run_12h_wrapper(pair,position,base_len,fast_len,slow_len,tf_len,isderivate):
     return pos
 
 def init_h12_pairs():
+    '''
+    pair=the pair
+    position=if actually is position open
+    base_ema=the slope ema length
+    fast:the slopeF ema len
+    slow:the slopeS ema len
+    th_ema: trandfilter ema
+    isderivate: if u want to use a derivate (es btc-perp on ftx to entry short) default no margin trandig
+    '''
     h12_pairs.append({'pair':'BTC/USDT', 'position': 1, "base_ema":130, "fast":9, "slow" : 21, "tf_ema":200,"isderivate":1})
     
 def run_12h_slope():
